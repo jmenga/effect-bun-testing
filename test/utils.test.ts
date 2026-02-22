@@ -1,5 +1,5 @@
 import { describe, test, expect } from "bun:test"
-import { Option, Result, Exit, Cause, Effect } from "effect"
+import { Option, Either, Exit, Cause, Effect } from "effect"
 import {
   fail,
   deepStrictEqual,
@@ -44,7 +44,10 @@ describe("primitive assertions", () => {
   test("assertEquals (Effect Equal)", () => {
     assertEquals(42, 42)
     assertEquals("hello", "hello")
-    assertEquals([1, 2, 3], [1, 2, 3])
+    // Note: Equal.equals uses reference equality for non-Equal values in v3.
+    // Plain arrays are not Equal-tagged, so only same-reference comparisons pass.
+    const arr = [1, 2, 3]
+    assertEquals(arr, arr)
     expect(() => assertEquals(1, 2)).toThrow()
   })
 
@@ -114,13 +117,13 @@ describe("Option assertions", () => {
   })
 })
 
-describe("Result assertions", () => {
-  test("assertRight / assertSuccess_", () => {
-    assertRight(Result.succeed("ok"), "ok")
+describe("Either assertions", () => {
+  test("assertRight", () => {
+    assertRight(Either.right("ok"), "ok")
   })
 
-  test("assertLeft / assertFailure_", () => {
-    assertLeft(Result.fail("err"), "err")
+  test("assertLeft", () => {
+    assertLeft(Either.left("err"), "err")
   })
 })
 

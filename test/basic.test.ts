@@ -1,7 +1,7 @@
 import { describe, expect } from "bun:test"
 import { it } from "../src/index.ts"
-import { Effect, Layer, Ref, ServiceMap } from "effect"
-import { TestClock } from "effect/testing"
+import { Context, Effect, Layer, Ref } from "effect"
+import * as TestClock from "effect/TestClock"
 
 describe("it.effect", () => {
   it.effect("runs a basic Effect test", () =>
@@ -19,15 +19,6 @@ describe("it.effect", () => {
     })
   )
 
-  it.effect("auto-scopes (no explicit Scope needed)", () =>
-    Effect.gen(function*() {
-      const ref = yield* Ref.make(0)
-      yield* Effect.addFinalizer(() => Ref.set(ref, 99))
-      const before = yield* Ref.get(ref)
-      expect(before).toBe(0)
-    })
-  )
-
   it.effect("provides TestClock", () =>
     Effect.gen(function*() {
       const before = yield* Effect.clockWith((clock) => clock.currentTimeMillis)
@@ -40,9 +31,20 @@ describe("it.effect", () => {
   it.effect("handles failures correctly", () =>
     Effect.gen(function*() {
       const result = yield* Effect.fail("boom").pipe(
-        Effect.catch(() => Effect.succeed("recovered"))
+        Effect.catchAll(() => Effect.succeed("recovered"))
       )
       expect(result).toBe("recovered")
+    })
+  )
+})
+
+describe("it.scoped", () => {
+  it.scoped("auto-scopes (explicit Scope via it.scoped)", () =>
+    Effect.gen(function*() {
+      const ref = yield* Ref.make(0)
+      yield* Effect.addFinalizer(() => Ref.set(ref, 99))
+      const before = yield* Ref.get(ref)
+      expect(before).toBe(0)
     })
   )
 })
@@ -54,7 +56,7 @@ describe("it.effect", () => {
 interface Greeter {
   readonly greet: (name: string) => Effect.Effect<string>
 }
-const Greeter = ServiceMap.Service<Greeter>("test/Greeter")
+const Greeter = Context.GenericTag<Greeter>("test/Greeter")
 
 const GreeterLive = Layer.succeed(Greeter)({
   greet: (name) => Effect.succeed(`Hello, ${name}!`)
@@ -85,8 +87,10 @@ describe("it.live", () => {
       expect(now).toBeGreaterThan(0)
     })
   )
+})
 
-  it.live("auto-scopes resources", () =>
+describe("it.scopedLive", () => {
+  it.scopedLive("auto-scopes resources without test services", () =>
     Effect.gen(function*() {
       const ref = yield* Ref.make("alive")
       yield* Effect.addFinalizer(() => Ref.set(ref, "finalized"))

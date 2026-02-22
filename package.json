@@ -27,13 +27,13 @@
     "README.md"
   ],
   "peerDependencies": {
-    "effect": "^4.0.0-beta.10"
+    "effect": "^3.0.0"
   },
   "devDependencies": {
     "@changesets/changelog-github": "^0.5.2",
     "@changesets/cli": "^2.29.8",
     "@types/bun": "^1.2.0",
-    "effect": "4.0.0-beta.10",
+    "effect": "3.19.19",
     "fast-check": "^3.23.0"
   },
   "scripts": {

@@ -1,6 +1,6 @@
 import { describe, expect } from "bun:test"
 import { it, layer } from "../src/index.ts"
-import { Effect, Layer, ServiceMap } from "effect"
+import { Context, Effect, Layer } from "effect"
 
 // -- Service definitions --
 
@@ -8,7 +8,7 @@ interface Counter {
   readonly get: Effect.Effect<number>
   readonly increment: Effect.Effect<void>
 }
-const Counter = ServiceMap.Service<Counter>("test/Counter")
+const Counter = Context.GenericTag<Counter>("test/Counter")
 
 const CounterLive = Layer.effect(
   Counter,
@@ -25,7 +25,7 @@ interface Logger {
   readonly log: (msg: string) => Effect.Effect<void>
   readonly messages: Effect.Effect<ReadonlyArray<string>>
 }
-const Logger = ServiceMap.Service<Logger>("test/Logger")
+const Logger = Context.GenericTag<Logger>("test/Logger")
 
 const LoggerLive = Layer.effect(
   Logger,

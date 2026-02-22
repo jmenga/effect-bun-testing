@@ -4,25 +4,27 @@ Effect test helpers for Bun's built-in test runner.
 
 This library ports the [`@effect/vitest`](https://github.com/Effect-TS/effect/tree/main/packages/vitest) API to [`bun:test`](https://bun.sh/docs/cli/test), providing first-class support for running Effect programs in Bun's test runner — including test services (`TestClock`, `TestConsole`), scoping, property-based testing, and all standard test modifiers.
 
-> For Effect v3, install `effect-bun-testing@v3`.
+> This is the Effect v3 version. For Effect v4, install `effect-bun-testing@latest`.
 
 ## Requirements
 
 - [Bun](https://bun.sh) >= 1.0
-- [Effect](https://effect.website) v4 (`^4.0.0-beta.10`)
+- [Effect](https://effect.website) v3 (`^3.0.0`)
 
 ## Installation
 
 ```bash
-bun add effect-bun-testing
+bun add effect-bun-testing@v3
 ```
 
 ## Overview
 
 | API | Description |
 |---|---|
-| `it.effect` | Run an Effect test with test services (auto-scoped) |
-| `it.live` | Run an Effect test without test services (auto-scoped) |
+| `it.effect` | Run an Effect test with test services (`TestClock`, etc.) |
+| `it.scoped` | Run an Effect test with test services, auto-scoped |
+| `it.live` | Run an Effect test without test services |
+| `it.scopedLive` | Run an Effect test without test services, auto-scoped |
 | `it.effect.skip` | Skip an Effect test |
 | `it.effect.only` | Run only this Effect test |
 | `it.effect.skipIf(cond)` | Skip when condition is truthy |
@@ -55,22 +57,20 @@ describe("my tests", () => {
 })
 ```
 
-### Defining services
-
-```ts
-import { Effect, Layer, ServiceMap } from "effect"
-
-interface Greeter {
-  readonly greet: (name: string) => Effect.Effect<string>
-}
-const Greeter = ServiceMap.Service<Greeter>("app/Greeter")
-```
-
 ### Providing layers per-test
 
 The standard pattern is to pipe layers directly to individual tests using `Effect.provide`. Each test gets a fresh layer instance.
 
 ```ts
+import { describe, expect } from "bun:test"
+import { it } from "effect-bun-testing"
+import { Context, Effect, Layer } from "effect"
+
+interface Greeter {
+  readonly greet: (name: string) => Effect.Effect<string>
+}
+const Greeter = Context.GenericTag<Greeter>("app/Greeter")
+
 const GreeterLive = Layer.succeed(Greeter)({
   greet: (name) => Effect.succeed(`Hello, ${name}!`)
 })
@@ -107,7 +107,7 @@ it.effect("uses multiple services", () =>
 `it.effect` provides `TestClock` automatically. Use `TestClock.adjust` to advance time without waiting.
 
 ```ts
-import { TestClock } from "effect/testing"
+import * as TestClock from "effect/TestClock"
 
 it.effect("advances time via TestClock", () =>
   Effect.gen(function*() {
@@ -121,10 +121,12 @@ it.effect("advances time via TestClock", () =>
 
 ### Scoped tests
 
-`it.effect` and `it.live` auto-scope in Effect v4, so no special handling is needed for `Effect.addFinalizer` or other scoped resources:
+`it.effect` does **not** auto-scope. If your test uses `Effect.addFinalizer` or other scoped resources, use `it.scoped` instead:
 
 ```ts
-it.effect("auto-scopes resources", () =>
+import { Ref } from "effect"
+
+it.scoped("runs finalizers at end of test", () =>
   Effect.gen(function*() {
     const ref = yield* Ref.make(0)
     yield* Effect.addFinalizer(() => Ref.set(ref, 99))
@@ -135,13 +137,15 @@ it.effect("auto-scopes resources", () =>
 )
 ```
 
+Similarly, `it.scopedLive` provides scoping without test services.
+
 ### Handling failures
 
 ```ts
 it.effect("handles failures", () =>
   Effect.gen(function*() {
     const result = yield* Effect.fail("boom").pipe(
-      Effect.catch(() => Effect.succeed("recovered"))
+      Effect.catchAll(() => Effect.succeed("recovered"))
     )
     expect(result).toBe("recovered")
   })
@@ -163,7 +167,7 @@ it.live("uses real clock", () =>
 
 ### Modifiers
 
-All standard `bun:test` modifiers are available on `it.effect`:
+All standard `bun:test` modifiers are available on `it.effect` (and `it.scoped`):
 
 ```ts
 // Skip a test
@@ -273,13 +277,13 @@ For expensive resources (database connections, server instances) or tests that i
 ```ts
 import { describe, expect } from "bun:test"
 import { it, layer } from "effect-bun-testing"
-import { Effect, Layer, ServiceMap } from "effect"
+import { Context, Effect, Layer } from "effect"
 
 interface Counter {
   readonly get: Effect.Effect<number>
   readonly increment: Effect.Effect<void>
 }
-const Counter = ServiceMap.Service<Counter>("app/Counter")
+const Counter = Context.GenericTag<Counter>("app/Counter")
 
 const CounterLive = Layer.effect(
   Counter,
@@ -329,20 +333,27 @@ Effect services are interfaces resolved from the environment, which makes them s
 ```ts
 import { beforeEach, describe, expect, mock } from "bun:test"
 import { it } from "effect-bun-testing"
-import { Effect, Layer, ServiceMap } from "effect"
+import { Context, Effect, Layer } from "effect"
+
+// ---------------------------------------------------------------------------
+// Service definitions
+// ---------------------------------------------------------------------------
 
 interface UserRepository {
   readonly findById: (id: string) => Effect.Effect<{ id: string; name: string } | null>
 }
-const UserRepository = ServiceMap.Service<UserRepository>("app/UserRepository")
+const UserRepository = Context.GenericTag<UserRepository>("app/UserRepository")
 
 interface NotificationService {
   readonly send: (userId: string, message: string) => Effect.Effect<void>
   readonly test: () => Effect.Effect<void>
 }
-const NotificationService = ServiceMap.Service<NotificationService>("app/NotificationService")
+const NotificationService = Context.GenericTag<NotificationService>("app/NotificationService")
 
+// ---------------------------------------------------------------------------
 // Business logic under test
+// ---------------------------------------------------------------------------
+
 const notifyUser = (userId: string, message: string) =>
   Effect.gen(function*() {
     const repo = yield* UserRepository
@@ -355,12 +366,19 @@ const notifyUser = (userId: string, message: string) =>
     return { sent: true, to: user.name }
   })
 
+// ---------------------------------------------------------------------------
 // 1. Create dynamically typed mocks
+// ---------------------------------------------------------------------------
+
 const mockFindById = mock()
 const mockSend = mock()
 
+// ---------------------------------------------------------------------------
 // 2. Wire mocks into test layers using Layer.mock
+// ---------------------------------------------------------------------------
+
 // Layer.mock accepts a partial implementation — only mock the methods you need.
+// This is preferable to Layer.succeed which requires the full service interface.
 const TestUserRepository = Layer.mock(UserRepository)({
   findById: mockFindById
 })
@@ -372,12 +390,18 @@ const TestNotificationService = Layer.mock(NotificationService)({
 
 const TestLayer = Layer.mergeAll(TestUserRepository, TestNotificationService)
 
+// ---------------------------------------------------------------------------
 // 3. Set defaults in beforeEach, provide layer per-test
+// ---------------------------------------------------------------------------
+
 describe("notifyUser", () => {
   beforeEach(() => {
     mockFindById.mockClear()
     mockSend.mockClear()
 
+    // Default implementations:
+    // - Use mockImplementation for methods with logic
+    // - Use mockReturnValue(Effect.void) for side-effect methods
     mockFindById.mockImplementation((id: string) =>
       Effect.succeed(id === "user-1" ? { id: "user-1", name: "Alice" } : null)
     )
@@ -393,8 +417,18 @@ describe("notifyUser", () => {
     }).pipe(Effect.provide(TestLayer))
   )
 
+  it.effect("fails for non-existent user", () =>
+    Effect.gen(function*() {
+      const result = yield* notifyUser("user-999", "hi").pipe(
+        Effect.catchAll((e) => Effect.succeed({ error: (e as Error).message }))
+      )
+      expect(result).toEqual({ error: "User user-999 not found" })
+    }).pipe(Effect.provide(TestLayer))
+  )
+
   it.effect("can override mock per-test", () =>
     Effect.gen(function*() {
+      // Override for this test only — beforeEach resets for the next test
       mockFindById.mockReturnValue(
         Effect.succeed({ id: "user-42", name: "Bob" })
       )
@@ -427,9 +461,8 @@ import {
   assertFalse,        // Falsy assertion
   assertNone,         // Option is None
   assertSome,         // Option is Some with expected value
-  assertSuccess_,     // Result is Success with expected value
-  assertFailure_,     // Result is Failure with expected value
-  assertRight,        // Alias for assertSuccess_ (vitest compat)
+  assertRight,        // Either is Right with expected value
+  assertLeft,         // Either is Left with expected value
   assertExitSuccess,  // Exit is Success with expected value
   assertExitFailure,  // Exit is Failure with expected Cause
   deepStrictEqual,    // Structural equality (toStrictEqual)
@@ -448,7 +481,9 @@ import {
 | @effect/vitest | effect-bun-testing | Notes |
 |---|---|---|
 | `it.effect(name, (ctx) => ...)` | `it.effect(name, () => ...)` | No TestContext param (Bun has none) |
+| `it.scoped(name, (ctx) => ...)` | `it.scoped(name, () => ...)` | Same |
 | `it.live(name, (ctx) => ...)` | `it.live(name, () => ...)` | Same |
+| `it.scopedLive(name, (ctx) => ...)` | `it.scopedLive(name, () => ...)` | Same |
 | `it.effect.fails` | `it.effect.failing` | Bun's name; `fails` alias also available |
 | `it.effect.runIf(cond)` | `it.effect.if(cond)` | Bun's name; `runIf` alias also available |
 | `it.effect.skip/only/skipIf/each` | `it.effect.skip/only/skipIf/each` | Direct mapping |
