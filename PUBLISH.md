@@ -5,12 +5,12 @@ This project uses [changesets](https://github.com/changesets/changesets) for ver
 ## How it works
 
 1. **You make changes** and create a changeset describing what changed
-2. **You open a PR** — CI runs typechecks, build, and tests
-3. **CI applies the version bump** — if changesets are present, CI runs `changeset version` and commits the bumped `package.json` and `CHANGELOG.md` back to the PR branch
-4. **You review and merge the PR** — the version bump is part of the PR diff
+2. **You run `bun run version`** to consume the changeset, bump `package.json`, and update `CHANGELOG.md`
+3. **You open a PR** — CI runs typechecks, build, and tests
+4. **You merge the PR** — the version bump is part of the PR diff
 5. **Release workflow detects the new version** — compares `package.json` version against what's published on NPM. If it's new, it builds, publishes, and creates a GitHub release with a git tag
 
-Nothing is pushed directly to main — all changes arrive via PR merge.
+Nothing is pushed directly to main — all changes arrive via PR merge. CI never commits or pushes.
 
 ## Creating a changeset
 

@@ -8,13 +8,8 @@ jobs:
   ci:
     name: Typecheck & Test
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.head_ref }}
-          token: ${{ secrets.GITHUB_TOKEN }}
 
       - uses: oven-sh/setup-bun@v2
         with:
@@ -31,16 +26,3 @@ jobs:
 
       - name: Test
         run: bun test
-
-      - name: Version (if changesets present)
-        run: |
-          if ls .changeset/*.md 1>/dev/null 2>&1 && [ "$(ls .changeset/*.md | grep -v README.md)" ]; then
-            bun run version
-            git config user.name "github-actions[bot]"
-            git config user.email "github-actions[bot]@users.noreply.github.com"
-            if [ -n "$(git status --porcelain)" ]; then
-              git add -A
-              git commit -m "chore: version packages"
-              git push
-            fi
-          fi
