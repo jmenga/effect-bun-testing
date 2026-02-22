@@ -1,0 +1,68 @@
+name: Issue Triage
+
+on:
+  issues:
+    types: [opened]
+
+jobs:
+  triage:
+    name: Triage Issue
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          model: sonnet
+          prompt: |
+            You are a maintainer triaging a new issue for the @jmenga/effect-bun-test package — a library that ports @effect/vitest to Bun's built-in test runner.
+
+            ## Your task
+
+            Review the issue and take ONE of these actions:
+
+            ### 1. Needs more information
+            If the issue is unclear, missing reproduction steps, or missing version info:
+            - Comment asking specific clarifying questions
+            - Add the `triage/needs-info` label
+            - Stop here
+
+            ### 2. Invalid or won't fix
+            If the issue is clearly out of scope, a duplicate, or based on a misunderstanding:
+            - Comment explaining why with a polite tone
+            - Add the `triage/wont-fix` label
+            - Close the issue
+            - Stop here
+
+            ### 3. Valid — Claude can fix
+            If you can identify the fix by reading the codebase:
+            - Add the `triage/valid` label
+            - Create a branch, implement the fix, and open a PR that references the issue
+            - Comment on the issue linking to the PR
+
+            ### 4. Valid — needs human review
+            If the issue is valid but requires design decisions, breaking changes, or is too complex:
+            - Add the `triage/valid` and `triage/human-review` labels
+            - Comment with your analysis: what the issue is, where in the code it lives, and what approach you'd suggest
+
+            ## Guidelines
+
+            - Read the source code before making any assessment — don't guess
+            - Be concise in comments — maintainers are busy
+            - For bug reports, verify the described behavior by reading the relevant code paths
+            - For feature requests, check if it's already supported or partially implemented
+            - When creating a PR, include tests for the fix
+            - Don't make breaking API changes without human review
+            - If the issue mentions Effect v3 vs v4, check which branch is relevant (main = v4, v3 branch = v3)
+          direct_prompt: |
+            Triage this issue: #${{ github.event.issue.number }}
+            Title: ${{ github.event.issue.title }}
+          allowed_tools: "Bash,Read,Write,Edit,Glob,Grep"
+          timeout_minutes: 15

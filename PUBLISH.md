@@ -63,7 +63,11 @@ git push -u origin main
 git push -u origin v3
 ```
 
-### 2. Add the NPM_TOKEN secret
+### 2. Add repository secrets
+
+Two secrets are required:
+
+#### NPM_TOKEN
 
 The release workflow needs an NPM access token to publish.
 
@@ -80,6 +84,18 @@ The release workflow needs an NPM access token to publish.
    - Click "New repository secret"
    - Name: `NPM_TOKEN`
    - Value: paste the token from step 1
+   - Click "Add secret"
+
+#### ANTHROPIC_API_KEY
+
+The issue triage workflow uses Claude to automatically review and triage new issues.
+
+1. **Get an API key** from https://console.anthropic.com/settings/keys
+2. **Add to GitHub:**
+   - Go to your repo → Settings → Secrets and variables → Actions
+   - Click "New repository secret"
+   - Name: `ANTHROPIC_API_KEY`
+   - Value: paste the API key
    - Click "Add secret"
 
 ### 3. Workflow permissions
@@ -132,6 +148,28 @@ Then add the `NPM_TOKEN` secret (same steps as above — the same token works fo
 When publishing from v3, use a dist-tag to avoid overwriting the `latest` tag:
 - In `.changeset/config.json` on the v3 branch, the `baseBranch` is already set to `"v3"`
 - Changesets will handle versioning independently on each branch
+
+## Issue triage
+
+New issues are automatically triaged by Claude via the `.github/workflows/triage.yml` workflow. When an issue is opened, Claude:
+
+1. Reads the issue and the relevant source code
+2. Takes one of these actions:
+   - **Needs info** — comments with clarifying questions, labels `triage/needs-info`
+   - **Won't fix** — comments explaining why, labels `triage/wont-fix`, closes the issue
+   - **Can fix** — labels `triage/valid`, creates a branch with the fix, opens a PR
+   - **Needs human** — labels `triage/valid` and `triage/human-review`, comments with analysis
+
+Create these labels in your repository (Settings → Labels):
+
+| Label | Color | Description |
+|---|---|---|
+| `triage/needs-info` | `#d4c5f9` | More information needed from reporter |
+| `triage/valid` | `#0e8a16` | Issue confirmed as valid |
+| `triage/wont-fix` | `#e4e669` | Issue will not be addressed |
+| `triage/human-review` | `#fbca04` | Requires human decision |
+
+Requires the `ANTHROPIC_API_KEY` secret (see setup above).
 
 ## Changelog format
 
