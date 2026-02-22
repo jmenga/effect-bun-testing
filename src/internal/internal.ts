@@ -8,7 +8,8 @@ import {
   Schedule,
   Scope
 } from "effect"
-import { TestClock, TestConsole } from "effect/testing"
+import * as TestContext from "effect/TestContext"
+import * as Logger from "effect/Logger"
 import {
   describe,
   beforeAll,
@@ -82,12 +83,14 @@ export interface Prop {
   ): void
 }
 
-export type TestServices = TestClock.TestClock | TestConsole.TestConsole
+export type TestServices = never
 
 /** Full method set exposed on `it` and returned from `makeMethods`. */
 export interface Methods {
-  readonly effect: Tester<TestServices | Scope.Scope>
-  readonly live: Tester<Scope.Scope>
+  readonly effect: Tester<never>
+  readonly scoped: Tester<Scope.Scope>
+  readonly live: Tester<never>
+  readonly scopedLive: Tester<Scope.Scope>
   readonly flakyTest: typeof flakyTest
   readonly layer: typeof layer
   readonly prop: Prop
@@ -95,7 +98,8 @@ export interface Methods {
 
 /** Method set available inside a `layer()` callback. */
 export interface MethodsNonLive<R, ExcludeTestServices extends boolean = false> {
-  readonly effect: Tester<ExcludeTestServices extends true ? R | Scope.Scope : R | TestServices | Scope.Scope>
+  readonly effect: Tester<R>
+  readonly scoped: Tester<R | Scope.Scope>
   readonly flakyTest: typeof flakyTest
   readonly layer: <R2, E2>(
     layer_: Layer.Layer<R2, E2>,
@@ -106,7 +110,7 @@ export interface MethodsNonLive<R, ExcludeTestServices extends boolean = false> 
 
 export interface LayerOptions {
   readonly memoMap?: Layer.MemoMap
-  readonly timeout?: Duration.Input
+  readonly timeout?: Duration.DurationInput
   readonly excludeTestServices?: boolean
 }
 
@@ -119,9 +123,8 @@ export type LayerFn<R, ExcludeTestServices extends boolean = false> = {
 // Test Environment
 // ---------------------------------------------------------------------------
 
-const TestEnv: Layer.Layer<TestServices> = Layer.mergeAll(
-  TestConsole.layer,
-  TestClock.layer()
+const TestEnv: Layer.Layer<any> = TestContext.TestContext.pipe(
+  Layer.provide(Logger.remove(Logger.defaultLogger))
 )
 
 // ---------------------------------------------------------------------------
@@ -134,7 +137,7 @@ const runPromise = <A, E>(effect: Effect.Effect<A, E, never>): Promise<A> =>
     if (Exit.isSuccess(exit)) {
       return exit.value
     }
-    if (Cause.hasInterruptsOnly(exit.cause)) {
+    if (Cause.isInterruptedOnly(exit.cause)) {
       throw new Error("All fibers interrupted without errors.")
     }
     const errors = Cause.prettyErrors(exit.cause)
@@ -234,13 +237,21 @@ export const makeTester = <R>(
 // Preconfigured testers
 // ---------------------------------------------------------------------------
 
-/** Run effects with TestClock + TestConsole, auto-scoped. */
-export const effect: Tester<TestServices | Scope.Scope> = makeTester((e) =>
+/** Run effects with test services (TestClock, TestConsole, etc.). Not auto-scoped. */
+export const effect: Tester<never> = makeTester((e) =>
+  Effect.provide(e, TestEnv)
+)
+
+/** Run effects with test services, auto-scoped. */
+export const scoped: Tester<Scope.Scope> = makeTester((e) =>
   e.pipe(Effect.scoped, Effect.provide(TestEnv))
 )
 
+/** Run effects live (no test services), not auto-scoped. */
+export const live: Tester<never> = makeTester((e) => e as any)
+
 /** Run effects live (no test services), auto-scoped. */
-export const live: Tester<Scope.Scope> = makeTester((e) => Effect.scoped(e))
+export const scopedLive: Tester<Scope.Scope> = makeTester((e) => Effect.scoped(e))
 
 // ---------------------------------------------------------------------------
 // flakyTest  — retry an effect up to 10 times within a timeout
@@ -248,12 +259,16 @@ export const live: Tester<Scope.Scope> = makeTester((e) => Effect.scoped(e))
 
 export const flakyTest = <A, E, R>(
   self: Effect.Effect<A, E, R>,
-  timeout: Duration.Input = Duration.seconds(30)
+  timeout: Duration.DurationInput = Duration.seconds(30)
 ): Effect.Effect<A, never, R> =>
   pipe(
-    Effect.catchDefect(self, (defect) => Effect.fail(defect as any)),
+    Effect.catchAllDefect(self, (defect) => Effect.fail(defect as any)),
     Effect.retry(
-      Schedule.both(Schedule.recurs(10), Schedule.during(timeout))
+      pipe(
+        Schedule.recurs(10),
+        Schedule.compose(Schedule.elapsed),
+        Schedule.whileOutput(Duration.lessThanOrEqualTo(timeout))
+      )
     ),
     Effect.orDie
   ) as any
@@ -289,40 +304,48 @@ export const layer = <R, E, const ExcludeTestServices extends boolean = false>(
   layer_: Layer.Layer<R, E>,
   options?: {
     readonly memoMap?: Layer.MemoMap
-    readonly timeout?: Duration.Input
+    readonly timeout?: Duration.DurationInput
     readonly excludeTestServices?: ExcludeTestServices
   }
 ): LayerFn<R, ExcludeTestServices> => {
-  type Env = ExcludeTestServices extends true ? R : R | TestServices
 
   return ((...args: any[]) => {
     const excludeTestServices = options?.excludeTestServices ?? false
     const withTestEnv: Layer.Layer<any, any> = excludeTestServices
       ? (layer_ as any)
       : Layer.provideMerge(layer_ as any, TestEnv as any)
-    const memoMap = options?.memoMap ?? Layer.makeMemoMapUnsafe()
-    const scope = Scope.makeUnsafe()
+    const memoMap = options?.memoMap ?? Effect.runSync(Layer.makeMemoMap)
+    const scope = Effect.runSync(Scope.make())
     const timeout = options?.timeout
       ? Duration.toMillis(options.timeout)
       : undefined
 
-    const serviceMapEffect = pipe(
-      Layer.buildWithMemoMap(withTestEnv, memoMap, scope),
+    const runtimeEffect = pipe(
+      Layer.toRuntimeWithMemoMap(withTestEnv, memoMap),
+      Scope.extend(scope),
       Effect.orDie,
       Effect.cached,
       Effect.runSync
     )
 
-    const effectTester = makeTester<Env>(
+    const effectTester = makeTester<any>(
       (e) =>
-        Effect.flatMap(serviceMapEffect, (serviceMap) =>
-          e.pipe(Effect.scoped, Effect.provide(serviceMap))
+        Effect.flatMap(runtimeEffect, (runtime) =>
+          Effect.provide(e, runtime)
+        ) as any
+    )
+
+    const scopedTester = makeTester<any>(
+      (e) =>
+        Effect.flatMap(runtimeEffect, (runtime) =>
+          e.pipe(Effect.scoped, Effect.provide(runtime))
         ) as any
     )
 
     const makeIt = (): MethodsNonLive<R, ExcludeTestServices> =>
       ({
         effect: effectTester,
+        scoped: scopedTester,
         flakyTest,
         prop,
         layer: <R2, E2>(
@@ -341,7 +364,7 @@ export const layer = <R, E, const ExcludeTestServices extends boolean = false>(
 
     if (args.length === 1) {
       beforeAll(
-        () => runPromise(Effect.asVoid(serviceMapEffect)),
+        () => runPromise(Effect.asVoid(runtimeEffect)),
         timeout
       )
       afterAll(
@@ -353,7 +376,7 @@ export const layer = <R, E, const ExcludeTestServices extends boolean = false>(
 
     return describe(args[0] as string, () => {
       beforeAll(
-        () => runPromise(Effect.asVoid(serviceMapEffect)),
+        () => runPromise(Effect.asVoid(runtimeEffect)),
         timeout
       )
       afterAll(
@@ -371,7 +394,9 @@ export const layer = <R, E, const ExcludeTestServices extends boolean = false>(
 
 export const makeMethods = (): Methods => ({
   effect,
+  scoped,
   live,
+  scopedLive,
   flakyTest,
   layer,
   prop

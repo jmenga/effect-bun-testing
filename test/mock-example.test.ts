@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, mock } from "bun:test"
 import { it } from "../src/index.ts"
-import { Effect, Layer, ServiceMap } from "effect"
+import { Context, Effect, Layer } from "effect"
 
 // ---------------------------------------------------------------------------
 // Service definitions
@@ -9,13 +9,13 @@ import { Effect, Layer, ServiceMap } from "effect"
 interface UserRepository {
   readonly findById: (id: string) => Effect.Effect<{ id: string; name: string } | null>
 }
-const UserRepository = ServiceMap.Service<UserRepository>("test/UserRepository")
+const UserRepository = Context.GenericTag<UserRepository>("test/UserRepository")
 
 interface NotificationService {
   readonly send: (userId: string, message: string) => Effect.Effect<void>
   readonly test: () => Effect.Effect<void>
 }
-const NotificationService = ServiceMap.Service<NotificationService>("test/NotificationService")
+const NotificationService = Context.GenericTag<NotificationService>("test/NotificationService")
 
 // Business logic that depends on both services
 const notifyUser = (userId: string, message: string) =>
@@ -75,7 +75,7 @@ describe("mock example", () => {
   it.effect("fails for non-existent user", () =>
     Effect.gen(function*() {
       const result = yield* notifyUser("user-999", "hi").pipe(
-        Effect.catch((e) => Effect.succeed({ error: (e as Error).message }))
+        Effect.catchAll((e) => Effect.succeed({ error: (e as Error).message }))
       )
       expect(result).toEqual({ error: "User user-999 not found" })
     }).pipe(Effect.provide(TestLayer))

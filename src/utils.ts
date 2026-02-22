@@ -1,6 +1,6 @@
 import { expect } from "bun:test"
 import * as Equal from "effect/Equal"
-import { Option, Result, Exit, Cause } from "effect"
+import { Option, Either, Exit, Cause } from "effect"
 
 // ---------------------------------------------------------------------------
 // Primitive assertions
@@ -146,43 +146,27 @@ export function assertSome<A>(
 }
 
 // ---------------------------------------------------------------------------
-// Result assertions (v4: Either → Result)
+// Either assertions
 // ---------------------------------------------------------------------------
 
-export function assertSuccess_<A, E>(
-  result: Result.Result<A, E>,
-  expected: A
-): asserts result is Result.Success<A, E> {
-  expect(Result.isSuccess(result)).toBe(true)
-  if (Result.isSuccess(result)) {
-    assertEquals(result.success, expected)
-  }
-}
-
-export function assertFailure_<A, E>(
-  result: Result.Result<A, E>,
-  expected: E
-): asserts result is Result.Failure<A, E> {
-  expect(Result.isFailure(result)).toBe(true)
-  if (Result.isFailure(result)) {
-    assertEquals(result.failure as any, expected as any)
-  }
-}
-
-/** Alias for assertSuccess_ (vitest compat: assertRight). */
 export function assertRight<A, E>(
-  result: Result.Result<A, E>,
+  either: Either.Either<A, E>,
   expected: A
-): asserts result is Result.Success<A, E> {
-  assertSuccess_(result, expected)
+): asserts either is Either.Right<E, A> {
+  expect(Either.isRight(either)).toBe(true)
+  if (Either.isRight(either)) {
+    assertEquals(either.right, expected)
+  }
 }
 
-/** Alias for assertFailure_ (vitest compat: assertLeft). */
 export function assertLeft<A, E>(
-  result: Result.Result<A, E>,
+  either: Either.Either<A, E>,
   expected: E
-): asserts result is Result.Failure<A, E> {
-  assertFailure_(result, expected)
+): asserts either is Either.Left<E, A> {
+  expect(Either.isLeft(either)).toBe(true)
+  if (Either.isLeft(either)) {
+    assertEquals(either.left as any, expected as any)
+  }
 }
 
 // ---------------------------------------------------------------------------
