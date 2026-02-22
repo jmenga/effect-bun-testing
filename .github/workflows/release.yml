@@ -2,7 +2,7 @@ name: Release
 
 on:
   push:
-    branches: [main]
+    branches: [main, v3]
 
 concurrency: ${{ github.workflow }}-${{ github.ref }}
 
@@ -27,14 +27,20 @@ jobs:
         id: check
         run: |
           CURRENT=$(node -p "require('./package.json').version")
-          PUBLISHED=$(npm view "$( node -p "require('./package.json').name" )" version 2>/dev/null || echo "0.0.0")
+          PKG_NAME=$(node -p "require('./package.json').name")
+          if [ "${{ github.ref_name }}" = "main" ]; then
+            DIST_TAG="latest"
+          else
+            DIST_TAG="${{ github.ref_name }}"
+          fi
+          PUBLISHED=$(npm view "${PKG_NAME}@${DIST_TAG}" version 2>/dev/null || echo "0.0.0")
           if [ "$CURRENT" != "$PUBLISHED" ]; then
             echo "should_publish=true" >> "$GITHUB_OUTPUT"
             echo "version=$CURRENT" >> "$GITHUB_OUTPUT"
-            echo "New version $CURRENT (published: $PUBLISHED)"
+            echo "New version $CURRENT (published: ${PUBLISHED} on ${DIST_TAG})"
           else
             echo "should_publish=false" >> "$GITHUB_OUTPUT"
-            echo "Version $CURRENT already published, skipping"
+            echo "Version $CURRENT already published on ${DIST_TAG}, skipping"
           fi
 
       - name: Build
@@ -45,11 +51,21 @@ jobs:
         if: steps.check.outputs.should_publish == 'true'
         run: bun test
 
+      - name: Determine dist-tag
+        if: steps.check.outputs.should_publish == 'true'
+        id: tag
+        run: |
+          if [ "${{ github.ref_name }}" = "main" ]; then
+            echo "dist_tag=latest" >> "$GITHUB_OUTPUT"
+          else
+            echo "dist_tag=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Publish to NPM
         if: steps.check.outputs.should_publish == 'true'
         run: |
           echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > .npmrc
-          npm publish --access public
+          npm publish --access public --tag ${{ steps.tag.outputs.dist_tag }}
         env:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
 
