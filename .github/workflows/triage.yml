@@ -19,8 +19,8 @@ jobs:
 
       - uses: anthropics/claude-code-action@v1
         with:
-          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
-          model: sonnet
+          use_bedrock: "true"
+          claude_args: "--model us.anthropic.claude-sonnet-4-20250514-v1:0"
           prompt: |
             You are a maintainer triaging a new issue for the @jmenga/effect-bun-test package — a library that ports @effect/vitest to Bun's built-in test runner.
 
@@ -66,3 +66,7 @@ jobs:
             Title: ${{ github.event.issue.title }}
           allowed_tools: "Bash,Read,Write,Edit,Glob,Grep"
           timeout_minutes: 15
+        env:
+          CLAUDE_CODE_USE_BEDROCK: "1"
+          AWS_REGION: ${{ vars.AWS_REGION }}
+          AWS_BEARER_TOKEN_BEDROCK: ${{ secrets.AWS_BEARER_TOKEN_BEDROCK }}

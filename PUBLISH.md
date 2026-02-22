@@ -86,17 +86,26 @@ The release workflow needs an NPM access token to publish.
    - Value: paste the token from step 1
    - Click "Add secret"
 
-#### ANTHROPIC_API_KEY
+#### AWS_BEARER_TOKEN_BEDROCK
 
-The issue triage workflow uses Claude to automatically review and triage new issues.
+The issue triage workflow uses Claude via AWS Bedrock to automatically review and triage new issues.
 
-1. **Get an API key** from https://console.anthropic.com/settings/keys
-2. **Add to GitHub:**
+1. **Create a Bedrock API key** in the [AWS Bedrock console](https://console.aws.amazon.com/bedrock/) (us-east-1)
+2. **Add to GitHub as a secret:**
    - Go to your repo → Settings → Secrets and variables → Actions
    - Click "New repository secret"
-   - Name: `ANTHROPIC_API_KEY`
-   - Value: paste the API key
+   - Name: `AWS_BEARER_TOKEN_BEDROCK`
+   - Value: paste the Bedrock API key
    - Click "Add secret"
+
+#### AWS_REGION (variable)
+
+1. **Add to GitHub as a variable** (not a secret):
+   - Go to your repo → Settings → Secrets and variables → Actions → Variables tab
+   - Click "New repository variable"
+   - Name: `AWS_REGION`
+   - Value: `us-east-1`
+   - Click "Add variable"
 
 ### 3. Workflow permissions
 
@@ -169,7 +178,7 @@ Create these labels in your repository (Settings → Labels):
 | `triage/wont-fix` | `#e4e669` | Issue will not be addressed |
 | `triage/human-review` | `#fbca04` | Requires human decision |
 
-Requires the `ANTHROPIC_API_KEY` secret (see setup above).
+Requires the `AWS_BEARER_TOKEN_BEDROCK` secret and `AWS_REGION` variable (see setup above).
 
 ## Changelog format
 
