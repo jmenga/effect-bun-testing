@@ -1,0 +1,50 @@
+{
+  "name": "effect-bun-test",
+  "version": "0.1.0",
+  "description": "Effect test helpers for Bun's built-in test runner",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "bun": "./src/index.ts",
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      }
+    },
+    "./utils": {
+      "bun": "./src/utils.ts",
+      "import": {
+        "types": "./dist/utils.d.ts",
+        "default": "./dist/utils.js"
+      }
+    }
+  },
+  "files": [
+    "dist",
+    "src",
+    "README.md"
+  ],
+  "peerDependencies": {
+    "effect": "^4.0.0-beta.10"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.2.0",
+    "effect": "4.0.0-beta.10",
+    "fast-check": "^3.23.0"
+  },
+  "scripts": {
+    "test": "bun test",
+    "typecheck": "bun x tsc --noEmit",
+    "build": "rm -rf dist && tsc -p tsconfig.build.json",
+    "prepublishOnly": "bun run build"
+  },
+  "keywords": [
+    "effect",
+    "bun",
+    "test",
+    "testing"
+  ],
+  "license": "MIT"
+}
