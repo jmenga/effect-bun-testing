@@ -1,6 +1,6 @@
 {
   "name": "effect-bun-testing",
-  "version": "0.1.0",
+  "version": "4.0.0",
   "description": "Effect test helpers for Bun's built-in test runner",
   "type": "module",
   "main": "./dist/index.js",
