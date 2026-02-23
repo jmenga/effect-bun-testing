@@ -4,7 +4,7 @@ Effect test helpers for Bun's built-in test runner.
 
 This library ports the [`@effect/vitest`](https://github.com/Effect-TS/effect/tree/main/packages/vitest) API to [`bun:test`](https://bun.sh/docs/cli/test), providing first-class support for running Effect programs in Bun's test runner — including test services (`TestClock`, `TestConsole`), scoping, property-based testing, and all standard test modifiers.
 
-> For Effect v3, install `effect-bun-testing@v3`.
+> For Effect v3, install `effect-bun-testing@legacy`.
 
 ## Requirements
 

@@ -36,7 +36,7 @@ jobs:
           if [ "${{ github.ref_name }}" = "main" ]; then
             DIST_TAG="latest"
           else
-            DIST_TAG="${{ github.ref_name }}"
+            DIST_TAG="legacy"
           fi
           PUBLISHED=$(npm view "${PKG_NAME}@${DIST_TAG}" version 2>/dev/null || echo "0.0.0")
           if [ "$CURRENT" != "$PUBLISHED" ]; then
@@ -63,7 +63,7 @@ jobs:
           if [ "${{ github.ref_name }}" = "main" ]; then
             echo "dist_tag=latest" >> "$GITHUB_OUTPUT"
           else
-            echo "dist_tag=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+            echo "dist_tag=legacy" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Publish to NPM
